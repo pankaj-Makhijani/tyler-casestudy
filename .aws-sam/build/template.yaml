@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Api:
+    Cors:
+      AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+      AllowHeaders: '''*'''
+      AllowOrigin: '''*'''
+      AllowCredentials: '''*'''
+Resources:
+  DynamoBookTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: book
+      PrimaryKey:
+        Name: id
+        Type: String
+  GetBookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: GetBookFunction
+      MemorySize: 500
+      Timeout: 15
+      Handler: get-book.handler
+      Policies:
+      - AdministratorAccess
+      Runtime: nodejs12.x
+      Events:
+        AddBook:
+          Type: Api
+          Properties:
+            Path: /getbook
+            Method: get
+  CreateBookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: CreateBookFunction
+      MemorySize: 1024
+      Timeout: 15
+      Handler: create-book.handler
+      Policies:
+      - AdministratorAccess
+      Runtime: nodejs12.x
+      Events:
+        UserSignup:
+          Type: Api
+          Properties:
+            Path: /create-book
+            Method: post
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: EventRule
+      EventPattern:
+        source:
+        - tyler.create-book
+        detail:
+          state:
+          - created
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - GetBookFunction
+          - Arn
+        Id: GetBookTarget
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: GetBookFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - EventRule
+        - Arn
+  SNSTopicToNotifyAdmin:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: tylerTopic
+      Subscription:
+      - Protocol: email
+        Endpoint: pankaj.makhijani@rishabhsoft.com

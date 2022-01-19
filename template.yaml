@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Globals:
+
+# Global Declarations
+    Api:
+        Cors:
+            AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+            AllowHeaders: "'*'"
+            AllowOrigin: "'*'"
+            AllowCredentials: "'*'"
+Resources:
+
+  # DynamoDB Table
+  DynamoBookTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: book
+      PrimaryKey:
+        Name: id
+        Type: String
+
+  # Get Book Function (2nd lambda)
+  GetBookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      MemorySize: 500
+      Timeout: 15
+      Handler: get-book.handler
+      Policies: [AdministratorAccess]
+      Runtime: nodejs12.x
+      Events:
+        AddBook:
+          Type: Api
+          Properties:
+            Path: /getbook
+            Method: get
+
+  # Create Book Function (1st Lambda)
+  CreateBookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      MemorySize: 1024
+      Timeout: 15
+      Handler: create-book.handler
+      Policies: [AdministratorAccess]
+      Runtime: nodejs12.x
+      Events:
+        UserSignup:
+          Type: Api
+          Properties:
+            Path: /create-book
+            Method: post
+
+  # Creating Event rule in Event Bridge
+  EventRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "EventRule"
+      EventPattern: 
+        source: 
+          - "tyler.create-book"
+        detail: 
+          state: 
+            - "created"
+      State: "ENABLED"
+      Targets: 
+        - 
+          Arn: 
+            Fn::GetAtt: 
+              - "GetBookFunction"
+              - "Arn"
+          Id: "GetBookTarget"
+
+  # Assigning Permission to trigger Event
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: "GetBookFunction"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "EventRule"
+          - "Arn"
+
+  SNSTopicToNotifyAdmin:
+   Type: AWS::SNS::Topic
+   Properties:
+     TopicName: tylerTopic
+     Subscription:
+       - Protocol: email
+         Endpoint: "pankaj.makhijani@rishabhsoft.com"
